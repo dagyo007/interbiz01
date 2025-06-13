@@ -4,7 +4,8 @@ const bodyParser = require('body-parser');
 const db = require('./db'); // Ensure 'db' module is correctly set up for database connection
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
+
 
 app.use(cors());
 // Increased limit for body parser to handle potentially large image data
