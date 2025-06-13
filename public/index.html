@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>전시가전 입력폼</title>
+<style>
+  /* 기존 스타일 유지 */
+  .box { margin: 10px; }
+  label { display: block; margin-bottom: 5px; font-weight: bold; }
+  input, select, textarea { width: 100%; margin-bottom: 10px; padding: 5px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+  th { background-color: #f4f4f4; }
+  .image-preview img { max-width: 100px; margin-right: 10px; margin-bottom: 10px; }
+  button { padding: 8px 12px; }
+</style>
+</head>
+<body>
+  <h1>전시가전 입력폼</h1>
+  <form id="inputForm">
+    <div class="box"><label for="영업팀">영업팀</label><input type="text" name="영업팀" id="영업팀" /></div>
+    <!-- SR 성함 필드 name과 id를 'sr_name'으로 변경하여 서버와 일치시킴 -->
+    <div class="box"><label for="sr_name">SR 성함</label><input type="text" name="sr_name" id="sr_name" /></div>
+    <div class="box"><label for="매장명">매장명</label><input type="text" name="매장명" id="매장명" /></div>
+    <!-- 제품 모델명 필드 name과 id는 유효한 HTML 식별자여야 하므로, 제품_모델명_input으로 유지 -->
+    <!-- 자바스크립트에서 이 값을 DB 컬럼명 '제품 모델명'으로 매핑 -->
+    <div class="box"><label for="제품_모델명_input">제품 모델명</label><input type="text" name="제품_모델명_input" id="제품_모델명_input" /></div>
+    <div class="box"><label for="구분">구분</label><input type="text" name="구분" id="구분" /></div>
+    <div class="box"><label for="타입">타입</label><input type="text" name="타입" id="타입" /></div>
+    <div class="box"><label for="최초전시일">최초전시일</label><input type="date" name="최초전시일" id="최초전시일" /></div>
+    <div class="box"><label for="구성품">구성품</label><input type="text" name="구성품" id="구성품" /></div>
+    <div class="box"><label for="색상">색상</label><input type="text" name="색상" id="색상" /></div>
+    <div class="box"><label for="제품상태">제품상태</label><input type="text" name="제품상태" id="제품상태" /></div>
+    <div class="box"><label for="제품이상_메모">제품이상 메모</label><textarea name="제품이상_메모" id="제품이상_메모" rows="3"></textarea></div>
+    <div class="box"><label for="정상가격">정상가격</label><input type="text" name="정상가격" id="정상가격" /></div>
+    <div class="box">
+      <label for="images">사진 첨부 (다중 선택 가능)</label>
+      <input type="file" name="images" id="images" accept="image/*" multiple />
+    </div>
+    <div id="imagePreview" class="image-preview"></div>
+    <button type="submit">저장</button>
+  </form>
+
+  <table id="dataTable">
+    <thead>
+      <tr>
+        <th>영업팀</th>
+        <th>SR 성함</th>
+        <th>매장명</th>
+        <th>제품 모델명</th>
+        <th>구분</th>
+        <th>타입</th>
+        <th>최초전시일</th>
+        <th>구성품</th>
+        <th>색상</th>
+        <th>제품상태</th>
+        <th>제품이상 메모</th>
+        <th>정상가격</th>
+        <th>사진</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+<script>
+  // 폼 제출 시 서버로 보낼 필드명 (서버의 req.body 키와 일치)
+  // '제품 모델명'은 HTML input의 name이 '제품_모델명_input'이므로 별도 처리
+  const formFields = [
+    "영업팀", "sr_name", "매장명", "구분", "타입", "최초전시일",
+    "구성품", "색상", "제품상태", "제품이상_메모", "정상가격"
+  ];
+  const productModelDbName = "제품 모델명"; // DB 컬럼명 (공백 포함)
+
+  // 테이블 렌더링 시 사용할 컬럼 순서 (DB 컬럼명과 정확히 일치하며 HTML <th> 순서와도 일치)
+  const displayColumnOrder = [
+    "영업팀",
+    "sr_name",
+    "매장명",
+    productModelDbName, // "제품 모델명"을 변수로 사용
+    "구분",
+    "타입",
+    "최초전시일",
+    "구성품",
+    "색상",
+    "제품상태",
+    "제품이상_메모",
+    "정상가격"
+  ];
+
+
+  // 이미지 미리보기 함수
+  const imageInput = document.getElementById("images");
+  const imagePreview = document.getElementById("imagePreview");
+
+  imageInput.addEventListener("change", () => {
+    imagePreview.innerHTML = "";
+    const files = imageInput.files;
+    if (!files.length) return;
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.createElement("img");
+        img.src = e.target.result;
+        imagePreview.appendChild(img);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // 파일 → Base64 변환 Promise 함수
+  function readFileAsDataURL(file) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 테이블에 데이터 출력
+  function renderTable(data) {
+    const tbody = document.querySelector("#dataTable tbody");
+    tbody.innerHTML = "";
+    data.forEach(row => {
+      const tr = document.createElement("tr");
+
+      // 정의된 순서에 따라 컬럼 데이터 렌더링
+      displayColumnOrder.forEach(colName => {
+        const td = document.createElement("td");
+        td.textContent = row[colName] || "";
+        tr.appendChild(td);
+      });
+
+      // 이미지 컬럼 처리
+      const tdImg = document.createElement("td");
+      if (row.images) {
+        try {
+          const imgs = JSON.parse(row.images);
+          imgs.forEach(src => {
+            const img = document.createElement("img");
+            img.src = src;
+            img.style.maxWidth = "80px";
+            img.style.marginRight = "5px";
+            tdImg.appendChild(img);
+          });
+        } catch(e) {
+          console.error("이미지 파싱 오류:", e);
+        }
+      }
+      tr.appendChild(tdImg);
+      tbody.appendChild(tr);
+    });
+  }
+
+  // 서버에서 데이터 불러오기
+  async function loadDataFromServer() {
+    try {
+      const res = await fetch('/api/exhibits');
+      if (!res.ok) throw new Error("서버 오류");
+      const data = await res.json();
+      renderTable(data);
+    } catch (err) {
+      console.error("데이터 로딩 실패", err);
+      // 사용자에게 메시지 표시
+      alert("데이터를 불러오는 데 실패했습니다. 콘솔을 확인해주세요.");
+    }
+  }
+
+  loadDataFromServer(); // 페이지 로드 시 데이터 불러오기
+
+  // 폼 제출시 서버에 저장
+  document.getElementById("inputForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = {};
+
+    // formFields 배열에 있는 일반 필드 값 수집
+    formFields.forEach(f => {
+      formData[f] = form.elements[f]?.value.trim() || "";
+    });
+
+    // '제품 모델명'은 HTML input의 name이 '제품_모델명_input'이므로 별도 처리
+    formData[productModelDbName] = form.elements['제품_모델명_input']?.value.trim() || "";
+
+
+    const files = form.elements["images"].files;
+    formData.images = [];
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      const base64 = await readFileAsDataURL(file);
+      formData.images.push(base64);
+    }
+
+    try {
+      const res = await fetch('/api/exhibits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert("데이터가 저장되었습니다.");
+        form.reset();
+        imagePreview.innerHTML = "";
+        loadDataFromServer(); // 데이터 저장 후 목록 새로고침
+      } else {
+        alert("저장에 실패했습니다.");
+      }
+    } catch (err) {
+      alert("서버 오류가 발생했습니다.");
+      console.error(err);
+    }
+  });
+</script>
+</body>
+</html>
